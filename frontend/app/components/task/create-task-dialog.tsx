@@ -4,13 +4,19 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
+import { useCreateTaskMutation } from "@/hooks/use-task";
 import { createTaskSchema } from "@/lib/schema";
 import type { ProjectMemberRole, User } from "@/types";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { format } from "date-fns";
+import { CalendarIcon } from "lucide-react";
 import { useForm } from "react-hook-form";
+import { toast } from "sonner";
 import type { z } from "zod";
+import { Button } from "../ui/button";
+import { Calendar } from "../ui/calendar";
+import { Checkbox } from "../ui/checkbox";
 import {
   Form,
   FormControl,
@@ -18,24 +24,17 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "./ui/form";
-import { Input } from "./ui/input";
-import { Textarea } from "./ui/textarea";
+} from "../ui/form";
+import { Input } from "../ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "./ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
-import { Button } from "./ui/button";
-import { CalendarIcon } from "lucide-react";
-import { format } from "date-fns";
-import { Calendar } from "./ui/calendar";
-import { Checkbox } from "./ui/checkbox";
-import { useCreateTask } from "@/hooks/use-task";
-import { toast } from "sonner";
+} from "../ui/select";
+import { Textarea } from "../ui/textarea";
 
 interface CreateTaskDialogProps {
   open: boolean;
@@ -64,7 +63,7 @@ export const CreateTaskDialog = ({
     },
   });
 
-  const { mutate, isPending } = useCreateTask();
+  const { mutate, isPending } = useCreateTaskMutation();
 
   const onSubmit = (values: CreateTaskFormData) => {
     mutate(
@@ -142,7 +141,7 @@ export const CreateTaskDialog = ({
                           >
                             <FormItem>
                               <FormControl>
-                                <SelectTrigger>
+                                <SelectTrigger className="w-full">
                                   <SelectValue placeholder="Select status" />
                                 </SelectTrigger>
                               </FormControl>
@@ -175,7 +174,7 @@ export const CreateTaskDialog = ({
                           >
                             <FormItem>
                               <FormControl>
-                                <SelectTrigger>
+                                <SelectTrigger className="w-full">
                                   <SelectValue placeholder="Select priority" />
                                 </SelectTrigger>
                               </FormControl>

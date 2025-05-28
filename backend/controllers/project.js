@@ -74,7 +74,7 @@ const getProjectDetails = async (req, res) => {
       });
     }
 
-    return res.status(200).json(project);
+    res.status(200).json(project);
   } catch (error) {
     console.log(error);
     return res.status(500).json({

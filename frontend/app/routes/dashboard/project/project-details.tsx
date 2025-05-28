@@ -1,6 +1,6 @@
 import { BackButton } from "@/components/back-button";
 import { Loader } from "@/components/loader";
-import { CreateTaskDialog } from "@/components/task.create-task-dialog";
+import { CreateTaskDialog } from "@/components/task/create-task-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
@@ -166,8 +166,8 @@ const ProjectDetails = () => {
           </TabsContent>
         </Tabs>
       </div>
-      {/* create    task dialog */}
 
+      {/* create    task dialog */}
       <CreateTaskDialog
         open={isCreateTask}
         onOpenChange={setIsCreateTask}

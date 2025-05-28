@@ -1,8 +1,8 @@
-import type { CreateTaskFormData } from "@/components/task.create-task-dialog";
+import type { CreateTaskFormData } from "@/components/task/create-task-dialog";
 import { postData } from "@/lib/fetch-util";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-export const useCreateTask = () => {
+export const useCreateTaskMutation = () => {
   const queryClient = useQueryClient();
 
   return useMutation({

@@ -8,8 +8,6 @@ const createTask = async (req, res) => {
     const { title, description, status, priority, dueDate, assignees } =
       req.body;
 
-    console.log(req.body);
-
     const project = await Project.findById(projectId);
 
     if (!project) {
