@@ -30,5 +30,7 @@ export default [
       "workspaces/:workspaceId/projects/:projectId/tasks/:taskId",
       "routes/dashboard/task/task-details.tsx"
     ),
+    route("my-tasks", "routes/dashboard/my-tasks.tsx"),
+    route("members", "routes/dashboard/members.tsx"),
   ]),
 ] satisfies RouteConfig;
