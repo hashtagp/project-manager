@@ -1,8 +1,5 @@
 import type { User } from "@/types";
 import { createContext, useContext, useEffect, useState } from "react";
-import { queryClient } from "./react-query-provider";
-import { useLocation, useNavigate } from "react-router";
-import { publicRoutes } from "@/lib";
 
 interface AuthContextType {
   user: User | null;
@@ -10,6 +7,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (data: any) => Promise<void>;
   logout: () => Promise<void>;
+  updateUser: (userData: Partial<User>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -19,29 +17,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  const navigate = useNavigate();
-  const currentPath = useLocation().pathname;
-  const isPublicRoute = publicRoutes.includes(currentPath);
-
   // check if user is authenticated
   useEffect(() => {
     const checkAuth = async () => {
       setIsLoading(true);
       try {
         const storedUser = localStorage.getItem("user");
+        const token = localStorage.getItem("token");
 
-        if (storedUser) {
+        if (storedUser && token) {
           setUser(JSON.parse(storedUser));
           setIsAuthenticated(true);
         } else {
           setUser(null);
           setIsAuthenticated(false);
-          if (!isPublicRoute) {
-            navigate("/sign-in");
-          }
         }
       } catch (error) {
         console.error("Auth check failed:", error);
+        setUser(null);
+        setIsAuthenticated(false);
       } finally {
         setIsLoading(false);
       }
@@ -53,28 +47,47 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     const handleLogout = () => {
       logout();
-      navigate("/sign-in");
     };
     window.addEventListener("force-logout", handleLogout);
     return () => window.removeEventListener("force-logout", handleLogout);
   }, []);
 
   const login = async (data: any) => {
-    localStorage.setItem("token", data.token);
-    localStorage.setItem("user", JSON.stringify(data.user));
+    try {
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("user", JSON.stringify(data.user));
 
-    setUser(data.user);
-    setIsAuthenticated(true);
+      setUser(data.user);
+      setIsAuthenticated(true);
+    } catch (error) {
+      console.error("Login failed:", error);
+      throw error;
+    }
   };
 
   const logout = async () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
+    try {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
 
-    setUser(null);
-    setIsAuthenticated(false);
+      setUser(null);
+      setIsAuthenticated(false);
 
-    queryClient.clear();
+      // Clear any cached data
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('auth-logout'));
+      }
+    } catch (error) {
+      console.error("Logout failed:", error);
+    }
+  };
+
+  const updateUser = (userData: Partial<User>) => {
+    if (user) {
+      const updatedUser = { ...user, ...userData };
+      setUser(updatedUser);
+      localStorage.setItem("user", JSON.stringify(updatedUser));
+    }
   };
 
   const values = {
@@ -83,6 +96,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     isLoading,
     login,
     logout,
+    updateUser,
   };
 
   return <AuthContext.Provider value={values}>{children}</AuthContext.Provider>;
@@ -91,7 +105,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 export const useAuth = () => {
   const context = useContext(AuthContext);
 
-  if (!context) {
+  if (context === undefined) {
     throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;

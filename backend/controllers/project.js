@@ -86,6 +86,8 @@ const getProjectDetails = async (req, res) => {
 const getProjectTasks = async (req, res) => {
   try {
     const { projectId } = req.params;
+    const { includeArchived } = req.query; // Get query parameter
+    
     const project = await Project.findById(projectId).populate("members.user");
 
     if (!project) {
@@ -104,10 +106,13 @@ const getProjectTasks = async (req, res) => {
       });
     }
 
-    const tasks = await Task.find({
-      project: projectId,
-      isArchived: false,
-    })
+    // Build query filter - include archived tasks if requested
+    const taskFilter = { project: projectId };
+    if (includeArchived !== "true") {
+      taskFilter.isArchived = false;
+    }
+
+    const tasks = await Task.find(taskFilter)
       .populate("assignees", "name profilePicture")
       .sort({ createdAt: -1 });
 

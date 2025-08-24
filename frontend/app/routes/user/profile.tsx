@@ -28,7 +28,8 @@ import {
 import { useAuth } from "@/provider/auth-context";
 import type { User } from "@/types";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { AlertCircle, Loader, Loader2 } from "lucide-react";
+import { AlertCircle, Loader, Loader2, Upload } from "lucide-react";
+import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
@@ -59,12 +60,29 @@ export type ChangePasswordFormData = z.infer<typeof changePasswordSchema>;
 export type ProfileFormData = z.infer<typeof profileSchema>;
 
 const Profile = () => {
-  const { data: user, isPending } = useUserProfileQuery() as {
+  const { data: user, isPending, error: userError } = useUserProfileQuery() as {
     data: User;
     isPending: boolean;
+    error: any;
   };
-  const { logout } = useAuth();
+  const { logout, updateUser } = useAuth();
   const navigate = useNavigate();
+  const [uploading, setUploading] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  // Handle user data loading errors
+  if (userError) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            Failed to load user profile. Please refresh the page.
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
 
   const form = useForm<ChangePasswordFormData>({
     resolver: zodResolver(changePasswordSchema),
@@ -77,14 +95,20 @@ const Profile = () => {
   const profileForm = useForm<ProfileFormData>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
-      name: user?.name || "",
-      profilePicture: user?.profilePicture || "",
-    },
-    values: {
-      name: user?.name || "",
-      profilePicture: user?.profilePicture || "",
+      name: "",
+      profilePicture: "",
     },
   });
+
+  // Update form values when user data loads
+  React.useEffect(() => {
+    if (user) {
+      profileForm.reset({
+        name: user.name || "",
+        profilePicture: user.profilePicture || "",
+      });
+    }
+  }, [user, profileForm]);
 
   const { mutate: updateUserProfile, isPending: isUpdatingProfile } =
     useUpdateUserProfile();
@@ -109,28 +133,97 @@ const Profile = () => {
       },
       onError: (error: any) => {
         const errorMessage =
-          error.response?.data?.error || "Failed to update password";
+          error.response?.data?.error || 
+          error.response?.data?.message ||
+          "Failed to update password";
         toast.error(errorMessage);
-        console.log(error);
+        console.error("Password change error:", error);
       },
     });
   };
 
   const handleProfileFormSubmit = (values: ProfileFormData) => {
     updateUserProfile(
-      { name: values.name, profilePicture: values.profilePicture || "" },
+      { 
+        name: values.name, 
+        profilePicture: previewUrl || values.profilePicture || "" 
+      },
       {
-        onSuccess: () => {
+        onSuccess: (data: any) => {
           toast.success("Profile updated successfully");
+          setPreviewUrl(null); // Clear preview after successful update
+          
+          // Update the user context with the new profile data
+          // Safely handle the API response structure
+          if (updateUser && data && typeof data === 'object') {
+            const updatedData = {
+              ...(data.name && { name: data.name }),
+              ...(data.profilePicture !== undefined && { profilePicture: data.profilePicture }),
+            };
+            updateUser(updatedData);
+          }
         },
         onError: (error: any) => {
           const errorMessage =
             error.response?.data?.error || "Failed to update profile";
           toast.error(errorMessage);
-          console.log(error);
+          console.error("Profile update error:", error);
         },
       }
     );
+  };
+
+  const handleAvatarChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Reset any previous preview on new file selection
+    setPreviewUrl(null);
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select a valid image file (JPG, PNG, or GIF)');
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSize) {
+      const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+      toast.error(`Image size is ${sizeMB}MB. Please select an image smaller than 5MB.`);
+      return;
+    }
+
+    setUploading(true);
+    
+    try {
+      const reader = new FileReader();
+      
+      reader.onload = (e) => {
+        const result = e.target?.result;
+        if (typeof result === 'string') {
+          setPreviewUrl(result);
+          profileForm.setValue('profilePicture', result);
+          toast.success('Image loaded successfully. Click "Save Changes" to update your profile.');
+        } else {
+          toast.error('Failed to process image');
+        }
+        setUploading(false);
+      };
+      
+      reader.onerror = () => {
+        toast.error('Error reading file. Please try again.');
+        setUploading(false);
+        setPreviewUrl(null);
+      };
+      
+      reader.readAsDataURL(file);
+    } catch (error) {
+      console.error('Avatar upload error:', error);
+      toast.error('Error processing image. Please try again.');
+      setUploading(false);
+      setPreviewUrl(null);
+    }
   };
 
   if (isPending)
@@ -167,6 +260,7 @@ const Profile = () => {
                 <Avatar className="h-20 w-20 bg-gray-600">
                   <AvatarImage
                     src={
+                      previewUrl ||
                       profileForm.watch("profilePicture") ||
                       user?.profilePicture
                     }
@@ -176,13 +270,13 @@ const Profile = () => {
                     {user?.name?.charAt(0) || "U"}
                   </AvatarFallback>
                 </Avatar>
-                <div>
+                <div className="space-y-2">
                   <input
                     id="avatar-upload"
                     type="file"
                     accept="image/*"
-                    // onChange={handleAvatarChange}
-                    // disabled={uploading || isUpdatingProfile}
+                    onChange={handleAvatarChange}
+                    disabled={uploading || isUpdatingProfile}
                     style={{ display: "none" }}
                   />
                   <Button
@@ -192,10 +286,33 @@ const Profile = () => {
                     onClick={() =>
                       document.getElementById("avatar-upload")?.click()
                     }
-                    // disabled={uploading || isUpdatingProfile}
+                    disabled={uploading || isUpdatingProfile}
                   >
-                    Change Avatar
+                    {uploading ? (
+                      <>
+                        <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="mr-2 h-3 w-3" />
+                        Change Avatar
+                      </>
+                    )}
                   </Button>
+                  {previewUrl && (
+                    <p className="text-xs text-green-600 font-medium">
+                      ✓ New image ready. Click "Save Changes" to update.
+                    </p>
+                  )}
+                  {uploading && (
+                    <p className="text-xs text-blue-600">
+                      Processing image...
+                    </p>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    JPG, PNG or GIF. Max size 5MB.
+                  </p>
                 </div>
               </div>
               <FormField

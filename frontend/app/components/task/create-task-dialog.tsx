@@ -9,13 +9,11 @@ import { useCreateTaskMutation } from "@/hooks/use-task";
 import { createTaskSchema } from "@/lib/schema";
 import type { ProjectMemberRole, User } from "@/types";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { format } from "date-fns";
-import { CalendarIcon } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import type { z } from "zod";
 import { Button } from "../ui/button";
-import { Calendar } from "../ui/calendar";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Checkbox } from "../ui/checkbox";
 import {
   Form,
@@ -200,38 +198,13 @@ export const CreateTaskDialog = ({
                     <FormItem>
                       <FormLabel>Due Date</FormLabel>
                       <FormControl>
-                        <Popover modal={true}>
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant={"outline"}
-                              className={
-                                "w-full justify-start text-left font-normal" +
-                                (!field.value ? "text-muted-foreground" : "")
-                              }
-                            >
-                              <CalendarIcon className="size-4 mr-2" />
-                              {field.value ? (
-                                format(new Date(field.value), "PPPP")
-                              ) : (
-                                <span>Pick a date</span>
-                              )}
-                            </Button>
-                          </PopoverTrigger>
-
-                          <PopoverContent>
-                            <Calendar
-                              mode="single"
-                              selected={
-                                field.value ? new Date(field.value) : undefined
-                              }
-                              onSelect={(date) => {
-                                field.onChange(
-                                  date?.toISOString() || undefined
-                                );
-                              }}
-                            />
-                          </PopoverContent>
-                        </Popover>
+                        <DatePicker
+                          date={field.value ? new Date(field.value) : undefined}
+                          onSelect={(date) => {
+                            field.onChange(date?.toISOString() || undefined);
+                          }}
+                          placeholder="Select due date"
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

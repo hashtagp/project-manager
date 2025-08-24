@@ -54,7 +54,9 @@ const getWorkspaceDetails = async (req, res) => {
 
     const workspace = await Workspace.findById({
       _id: workspaceId,
-    }).populate("members.user", "name email profilePicture");
+    })
+    .populate("members.user", "name email profilePicture")
+    .populate("owner", "name email profilePicture");
 
     if (!workspace) {
       return res.status(404).json({
@@ -63,7 +65,12 @@ const getWorkspaceDetails = async (req, res) => {
     }
 
     res.status(200).json(workspace);
-  } catch (error) {}
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({
+      message: "Internal server error",
+    });
+  }
 };
 
 const getWorkspaceProjects = async (req, res) => {
@@ -99,27 +106,52 @@ const getWorkspaceProjects = async (req, res) => {
 };
 
 const getWorkspaceStats = async (req, res) => {
+  console.log("📊 [WORKSPACE] Getting workspace statistics");
+  
   try {
     const { workspaceId } = req.params;
+    console.log("🔍 [WORKSPACE] Workspace ID from params:", workspaceId);
 
+    // Validate workspaceId
+    if (!workspaceId || workspaceId === "null" || workspaceId === "undefined") {
+      console.log("❌ [WORKSPACE] Invalid workspace ID provided:", workspaceId);
+      return res.status(400).json({
+        message: "Invalid workspace ID provided",
+      });
+    }
+
+    // Check if workspaceId is a valid MongoDB ObjectId
+    if (!/^[0-9a-fA-F]{24}$/.test(workspaceId)) {
+      console.log("❌ [WORKSPACE] Invalid ObjectId format:", workspaceId);
+      return res.status(400).json({
+        message: "Invalid workspace ID format",
+      });
+    }
+
+    console.log("🔍 [WORKSPACE] Finding workspace by ID:", workspaceId);
     const workspace = await Workspace.findById(workspaceId);
 
     if (!workspace) {
+      console.log("❌ [WORKSPACE] Workspace not found:", workspaceId);
       return res.status(404).json({
         message: "Workspace not found",
       });
     }
+
+    console.log("✅ [WORKSPACE] Workspace found:", { id: workspace._id, name: workspace.name });
 
     const isMember = workspace.members.some(
       (member) => member.user.toString() === req.user._id.toString()
     );
 
     if (!isMember) {
+      console.log("❌ [WORKSPACE] User not a member of workspace:", { userId: req.user._id, workspaceId });
       return res.status(403).json({
         message: "You are not a member of this workspace",
       });
     }
 
+    console.log("✅ [WORKSPACE] User is member, fetching statistics");
     const [totalProjects, projects] = await Promise.all([
       Project.countDocuments({ workspace: workspaceId }),
       Project.find({ workspace: workspaceId })
@@ -129,6 +161,8 @@ const getWorkspaceStats = async (req, res) => {
         )
         .sort({ createdAt: -1 }),
     ]);
+
+    console.log("📊 [WORKSPACE] Projects fetched:", { totalProjects, projectsWithTasks: projects.length });
 
     const totalTasks = projects.reduce((acc, project) => {
       return acc + project.tasks.length;
@@ -296,6 +330,8 @@ const getWorkspaceStats = async (req, res) => {
       totalTaskInProgress,
     };
 
+    console.log("✅ [WORKSPACE] Statistics calculated successfully:", stats);
+
     res.status(200).json({
       stats,
       taskTrendsData,
@@ -306,7 +342,7 @@ const getWorkspaceStats = async (req, res) => {
       recentProjects: projects.slice(0, 5),
     });
   } catch (error) {
-    console.log(error);
+    console.error("💥 [WORKSPACE] Error getting workspace stats:", error);
     res.status(500).json({
       message: "Internal server error",
     });
@@ -530,6 +566,101 @@ const acceptInviteByToken = async (req, res) => {
     });
   }
 };
+
+const updateWorkspace = async (req, res) => {
+  try {
+    const { workspaceId } = req.params;
+    const { name, description, color } = req.body;
+
+    const workspace = await Workspace.findById(workspaceId);
+
+    if (!workspace) {
+      return res.status(404).json({
+        message: "Workspace not found",
+      });
+    }
+
+    // Check if user is the owner
+    if (workspace.owner.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        message: "Only the workspace owner can update workspace settings",
+      });
+    }
+
+    // Update only provided fields
+    if (name !== undefined) workspace.name = name;
+    if (description !== undefined) workspace.description = description;
+    if (color !== undefined) workspace.color = color;
+
+    await workspace.save();
+
+    await recordActivity(
+      req.user._id,
+      "updated_workspace",
+      "Workspace",
+      workspaceId,
+      {
+        description: `Updated ${workspace.name} workspace settings`,
+      }
+    );
+
+    res.status(200).json(workspace);
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({
+      message: "Internal server error",
+    });
+  }
+};
+
+const deleteWorkspace = async (req, res) => {
+  try {
+    const { workspaceId } = req.params;
+
+    const workspace = await Workspace.findById(workspaceId);
+
+    if (!workspace) {
+      return res.status(404).json({
+        message: "Workspace not found",
+      });
+    }
+
+    // Check if user is the owner
+    if (workspace.owner.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        message: "Only the workspace owner can delete the workspace",
+      });
+    }
+
+    // Delete all projects in the workspace (you might want to add cascade delete logic)
+    await Project.deleteMany({ workspace: workspaceId });
+
+    // Delete all workspace invites
+    await WorkspaceInvite.deleteMany({ workspaceId: workspaceId });
+
+    // Delete the workspace
+    await Workspace.findByIdAndDelete(workspaceId);
+
+    await recordActivity(
+      req.user._id,
+      "deleted_workspace",
+      "Workspace",
+      workspaceId,
+      {
+        description: `Deleted ${workspace.name} workspace`,
+      }
+    );
+
+    res.status(200).json({
+      message: "Workspace deleted successfully",
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({
+      message: "Internal server error",
+    });
+  }
+};
 export {
   createWorkspace,
   getWorkspaces,
@@ -539,4 +670,6 @@ export {
   inviteUserToWorkspace,
   acceptGenerateInvite,
   acceptInviteByToken,
+  updateWorkspace,
+  deleteWorkspace,
 };

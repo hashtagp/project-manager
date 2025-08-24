@@ -8,13 +8,26 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { UseProjectQuery } from "@/hooks/use-project";
+import { useUpdateTaskStatusMutation } from "@/hooks/use-task";
 import { getProjectProgress } from "@/lib";
 import { cn } from "@/lib/utils";
 import type { Project, Task, TaskStatus } from "@/types";
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  closestCenter,
+  useDraggable,
+  useDroppable,
+} from "@dnd-kit/core";
+import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core";
 import { format } from "date-fns";
 import { AlertCircle, Calendar, CheckCircle, Clock } from "lucide-react";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router";
+import { toast } from "sonner";
 
 const ProjectDetails = () => {
   const { projectId, workspaceId } = useParams<{
@@ -24,7 +37,18 @@ const ProjectDetails = () => {
   const navigate = useNavigate();
 
   const [isCreateTask, setIsCreateTask] = useState(false);
-  const [taskFilter, setTaskFilter] = useState<TaskStatus | "All">("All");
+  const [taskFilter, setTaskFilter] = useState<TaskStatus | "All" | "Archived">("All");
+  const [activeTask, setActiveTask] = useState<Task | null>(null);
+
+  const { mutate: updateTaskStatus } = useUpdateTaskStatusMutation();
+  
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    })
+  );
 
   const { data, isLoading } = UseProjectQuery(projectId!) as {
     data: {
@@ -50,6 +74,39 @@ const ProjectDetails = () => {
     );
   };
 
+  const handleDragStart = (event: DragStartEvent) => {
+    const { active } = event;
+    const task = tasks.find((t) => t._id === active.id);
+    setActiveTask(task || null);
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveTask(null);
+
+    if (!over) return;
+
+    const taskId = active.id as string;
+    const newStatus = over.id as TaskStatus;
+    
+    // Find the task being dragged
+    const task = tasks.find((t) => t._id === taskId);
+    if (!task || task.status === newStatus) return;
+
+    // Update task status
+    updateTaskStatus(
+      { taskId, status: newStatus },
+      {
+        onSuccess: () => {
+          toast.success(`Task moved to ${newStatus}`);
+        },
+        onError: () => {
+          toast.error("Failed to update task status");
+        },
+      }
+    );
+  };
+
   return (
     <div className="space-y-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -64,7 +121,7 @@ const ProjectDetails = () => {
         </div>
 
         <div className="flex flex-col sm:flex-row gap-3">
-          <div className="flex items-center gap-2 min-w-32">
+          <div className="flex items-center gap-2 min-w-48">
             <div className="text-sm text-muted-foreground">Progress:</div>
             <div className="flex-1">
               <Progress value={projectProgress} className="h-2" />
@@ -97,6 +154,9 @@ const ProjectDetails = () => {
               <TabsTrigger value="done" onClick={() => setTaskFilter("Done")}>
                 Done
               </TabsTrigger>
+              <TabsTrigger value="archived" onClick={() => setTaskFilter("Archived")}>
+                Archived
+              </TabsTrigger>
             </TabsList>
 
             <div className="flex items-center text-sm">
@@ -112,36 +172,56 @@ const ProjectDetails = () => {
                 <Badge variant="outline" className="bg-background">
                   {tasks.filter((task) => task.status === "Done").length} Done
                 </Badge>
+                <Badge variant="outline" className="bg-background">
+                  {tasks.filter((task) => task.isArchived === true).length} Archived
+                </Badge>
               </div>
             </div>
           </div>
 
           <TabsContent value="all" className="m-0">
-            <div className="grid grid-cols-3 gap-4">
-              <TaskColumn
-                title="To Do"
-                tasks={tasks.filter((task) => task.status === "To Do")}
-                onTaskClick={handleTaskClick}
-              />
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+            >
+              <div className="grid grid-cols-3 gap-4">
+                <TaskColumn
+                  title="To Do"
+                  status="To Do"
+                  tasks={tasks.filter((task) => task.status === "To Do")}
+                  onTaskClick={handleTaskClick}
+                />
 
-              <TaskColumn
-                title="In Progress"
-                tasks={tasks.filter((task) => task.status === "In Progress")}
-                onTaskClick={handleTaskClick}
-              />
+                <TaskColumn
+                  title="In Progress"
+                  status="In Progress"
+                  tasks={tasks.filter((task) => task.status === "In Progress")}
+                  onTaskClick={handleTaskClick}
+                />
 
-              <TaskColumn
-                title="Done"
-                tasks={tasks.filter((task) => task.status === "Done")}
-                onTaskClick={handleTaskClick}
-              />
-            </div>
+                <TaskColumn
+                  title="Done"
+                  status="Done"
+                  tasks={tasks.filter((task) => task.status === "Done")}
+                  onTaskClick={handleTaskClick}
+                />
+              </div>
+              
+              <DragOverlay>
+                {activeTask ? (
+                  <TaskCard task={activeTask} onClick={() => {}} isDragging />
+                ) : null}
+              </DragOverlay>
+            </DndContext>
           </TabsContent>
 
           <TabsContent value="todo" className="m-0">
             <div className="grid md:grid-cols-1 gap-4">
               <TaskColumn
                 title="To Do"
+                status="To Do"
                 tasks={tasks.filter((task) => task.status === "To Do")}
                 onTaskClick={handleTaskClick}
                 isFullWidth
@@ -153,6 +233,7 @@ const ProjectDetails = () => {
             <div className="grid md:grid-cols-1 gap-4">
               <TaskColumn
                 title="In Progress"
+                status="In Progress"
                 tasks={tasks.filter((task) => task.status === "In Progress")}
                 onTaskClick={handleTaskClick}
                 isFullWidth
@@ -164,7 +245,20 @@ const ProjectDetails = () => {
             <div className="grid md:grid-cols-1 gap-4">
               <TaskColumn
                 title="Done"
+                status="Done"
                 tasks={tasks.filter((task) => task.status === "Done")}
+                onTaskClick={handleTaskClick}
+                isFullWidth
+              />
+            </div>
+          </TabsContent>
+
+          <TabsContent value="archived" className="m-0">
+            <div className="grid md:grid-cols-1 gap-4">
+              <TaskColumn
+                title="Archived"
+                status="Done"
+                tasks={tasks.filter((task) => task.isArchived === true)}
                 onTaskClick={handleTaskClick}
                 isFullWidth
               />
@@ -188,6 +282,7 @@ export default ProjectDetails;
 
 interface TaskColumnProps {
   title: string;
+  status: TaskStatus;
   tasks: Task[];
   onTaskClick: (taskId: string) => void;
   isFullWidth?: boolean;
@@ -195,17 +290,25 @@ interface TaskColumnProps {
 
 const TaskColumn = ({
   title,
+  status,
   tasks,
   onTaskClick,
   isFullWidth = false,
 }: TaskColumnProps) => {
+  const { setNodeRef, isOver } = useDroppable({
+    id: status,
+  });
+
   return (
     <div
-      className={
+      ref={setNodeRef}
+      className={cn(
+        "space-y-4 p-4 rounded-lg border-2 border-dashed transition-colors",
+        isOver ? "border-blue-500 bg-blue-50/50" : "border-gray-200",
         isFullWidth
           ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
           : ""
-      }
+      )}
     >
       <div
         className={cn(
@@ -222,13 +325,13 @@ const TaskColumn = ({
 
         <div
           className={cn(
-            "space-y-3",
+            "space-y-3 min-h-[200px]",
             isFullWidth && "grid grid-cols-2 lg:grid-cols-3 gap-4"
           )}
         >
           {tasks.length === 0 ? (
-            <div className="text-center text-sm text-muted-foreground">
-              No tasks yet
+            <div className="text-center text-sm text-muted-foreground py-8">
+              {isOver ? "Drop task here" : "No tasks yet"}
             </div>
           ) : (
             tasks.map((task) => (
@@ -245,25 +348,62 @@ const TaskColumn = ({
   );
 };
 
-const TaskCard = ({ task, onClick }: { task: Task; onClick: () => void }) => {
+const TaskCard = ({ 
+  task, 
+  onClick, 
+  isDragging = false 
+}: { 
+  task: Task; 
+  onClick: () => void; 
+  isDragging?: boolean;
+}) => {
+  const { attributes, listeners, setNodeRef, transform, isDragging: isDragState } = useDraggable({
+    id: task._id,
+    disabled: task.isArchived, // Disable dragging for archived tasks
+  });
+
+  const style = transform ? {
+    transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+  } : undefined;
+
+  // Hide the original card when it's being dragged (not the overlay)
+  if (isDragState && !isDragging) {
+    return <div className="h-[200px] opacity-0" />; // Maintain space but hide content
+  }
+
   return (
     <Card
-      onClick={onClick}
-      className="cursor-pointer hover:shadow-md transition-all duration-300 hover:translate-y-1"
+      ref={setNodeRef}
+      style={style}
+      {...(!task.isArchived ? listeners : {})} // Only apply listeners if not archived
+      {...(!task.isArchived ? attributes : {})} // Only apply attributes if not archived
+      className={cn(
+        task.isArchived 
+          ? "cursor-default opacity-75 bg-muted/50" 
+          : "cursor-grab active:cursor-grabbing hover:shadow-md transition-all duration-300",
+        isDragging && "opacity-100 rotate-3 shadow-xl", // Only apply drag styling to overlay
+      )}
     >
       <CardHeader>
         <div className="flex items-center justify-between">
-          <Badge
-            className={
-              task.priority === "High"
-                ? "bg-red-500 text-white"
-                : task.priority === "Medium"
-                ? "bg-orange-500 text-white"
-                : "bg-slate-500 text-white"
-            }
-          >
-            {task.priority}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge
+              className={
+                task.priority === "High"
+                  ? "bg-red-500 text-white"
+                  : task.priority === "Medium"
+                  ? "bg-orange-500 text-white"
+                  : "bg-slate-500 text-white"
+              }
+            >
+              {task.priority}
+            </Badge>
+            {task.isArchived && (
+              <Badge variant="outline" className="text-muted-foreground">
+                Archived
+              </Badge>
+            )}
+          </div>
 
           <div className="flex gap-1">
             {task.status !== "To Do" && (
@@ -271,7 +411,8 @@ const TaskCard = ({ task, onClick }: { task: Task; onClick: () => void }) => {
                 variant={"ghost"}
                 size={"icon"}
                 className="size-6"
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation();
                   console.log("mark as to do");
                 }}
                 title="Mark as To Do"
@@ -285,7 +426,8 @@ const TaskCard = ({ task, onClick }: { task: Task; onClick: () => void }) => {
                 variant={"ghost"}
                 size={"icon"}
                 className="size-6"
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation();
                   console.log("mark as in progress");
                 }}
                 title="Mark as In Progress"
@@ -299,7 +441,8 @@ const TaskCard = ({ task, onClick }: { task: Task; onClick: () => void }) => {
                 variant={"ghost"}
                 size={"icon"}
                 className="size-6"
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation();
                   console.log("mark as done");
                 }}
                 title="Mark as Done"
@@ -312,7 +455,7 @@ const TaskCard = ({ task, onClick }: { task: Task; onClick: () => void }) => {
         </div>
       </CardHeader>
 
-      <CardContent>
+      <CardContent onClick={onClick} className="cursor-pointer">
         <h4 className="ont-medium mb-2">{task.title}</h4>
 
         {task.description && (

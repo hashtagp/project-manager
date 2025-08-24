@@ -2,12 +2,16 @@ import type { ProjectStatus, Task, TaskStatus } from "@/types";
 
 export const publicRoutes = [
   "/",
-  "/sign-in",
-  "/sign-up",
-  "/verify-email",
-  "/reset-password",
-  "/forgot-password",
-  "*",
+  "/auth/sign-in",
+  "/auth/sign-up", 
+  "/auth/verify-email",
+  "/auth/reset-password",
+  "/auth/forgot-password",
+  "/sign-in", // backward compatibility
+  "/sign-up", // backward compatibility
+  "/verify-email", // backward compatibility
+  "/reset-password", // backward compatibility
+  "/forgot-password", // backward compatibility
 ];
 
 export const getTaskStatusColor = (status: ProjectStatus) => {

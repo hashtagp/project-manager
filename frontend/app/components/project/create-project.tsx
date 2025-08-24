@@ -30,10 +30,7 @@ import {
 } from "../ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { Button } from "../ui/button";
-
-import { format } from "date-fns";
-import { CalendarIcon } from "lucide-react";
-import { Calendar } from "../ui/calendar";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Checkbox } from "../ui/checkbox";
 import { UseCreateProject } from "@/hooks/use-project";
 import { toast } from "sonner";
@@ -166,36 +163,13 @@ export const CreateProjectDialog = ({
                   <FormItem>
                     <FormLabel>Start Date</FormLabel>
                     <FormControl>
-                      <Popover modal={true}>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant={"outline"}
-                            className={
-                              "w-full justify-start text-left font-normal" +
-                              (!field.value ? "text-muted-foreground" : "")
-                            }
-                          >
-                            <CalendarIcon className="size-4 mr-2" />
-                            {field.value ? (
-                              format(new Date(field.value), "PPPP")
-                            ) : (
-                              <span>Pick a date</span>
-                            )}
-                          </Button>
-                        </PopoverTrigger>
-
-                        <PopoverContent>
-                          <Calendar
-                            mode="single"
-                            selected={
-                              field.value ? new Date(field.value) : undefined
-                            }
-                            onSelect={(date) => {
-                              field.onChange(date?.toISOString() || undefined);
-                            }}
-                          />
-                        </PopoverContent>
-                      </Popover>
+                      <DatePicker
+                        date={field.value ? new Date(field.value) : undefined}
+                        onSelect={(date) => {
+                          field.onChange(date?.toISOString() || undefined);
+                        }}
+                        placeholder="Select project start date"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -208,36 +182,13 @@ export const CreateProjectDialog = ({
                   <FormItem>
                     <FormLabel>Due Date</FormLabel>
                     <FormControl>
-                      <Popover modal={true}>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant={"outline"}
-                            className={
-                              "w-full justify-start text-left font-normal" +
-                              (!field.value ? "text-muted-foreground" : "")
-                            }
-                          >
-                            <CalendarIcon className="size-4 mr-2" />
-                            {field.value ? (
-                              format(new Date(field.value), "PPPP")
-                            ) : (
-                              <span>Pick a date</span>
-                            )}
-                          </Button>
-                        </PopoverTrigger>
-
-                        <PopoverContent>
-                          <Calendar
-                            mode="single"
-                            selected={
-                              field.value ? new Date(field.value) : undefined
-                            }
-                            onSelect={(date) => {
-                              field.onChange(date?.toISOString() || undefined);
-                            }}
-                          />
-                        </PopoverContent>
-                      </Popover>
+                      <DatePicker
+                        date={field.value ? new Date(field.value) : undefined}
+                        onSelect={(date) => {
+                          field.onChange(date?.toISOString() || undefined);
+                        }}
+                        placeholder="Select project due date"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

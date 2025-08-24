@@ -185,3 +185,45 @@ export interface WorkspaceProductivityData {
   completed: number;
   total: number;
 }
+
+export interface Notification {
+  _id: string;
+  user: string;
+  type: 
+    | "task_assigned"
+    | "task_completed"
+    | "task_status_changed"
+    | "task_commented"
+    | "task_priority_changed"
+    | "task_due_soon"
+    | "project_added"
+    | "project_status_changed"
+    | "project_member_added"
+    | "workspace_invited"
+    | "workspace_member_joined"
+    | "workspace_updated"
+    | "overdue_tasks"
+    | "weekly_summary"
+    | "achievement_unlocked";
+  title: string;
+  message: string;
+  resourceType: "Task" | "Project" | "Workspace" | "User";
+  resourceId: string;
+  actionBy: User;
+  isRead: boolean;
+  workspace: Workspace;
+  metadata: Record<string, any>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface NotificationResponse {
+  notifications: Notification[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+  };
+  unreadCount: number;
+}

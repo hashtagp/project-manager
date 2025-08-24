@@ -1,6 +1,7 @@
 import type { WorkspaceForm } from "@/components/workspace/create-workspace";
-import { fetchData, postData } from "@/lib/fetch-util";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import type { Workspace } from "@/types";
+import { fetchData, postData, updateData, deleteData } from "@/lib/fetch-util";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 export const useCreateWorkspace = () => {
   return useMutation({
@@ -22,17 +23,19 @@ export const useGetWorkspaceQuery = (workspaceId: string) => {
   });
 };
 
-export const useGetWorkspaceStatsQuery = (workspaceId: string) => {
+export const useGetWorkspaceStatsQuery = (workspaceId: string, options?: { enabled?: boolean }) => {
   return useQuery({
     queryKey: ["workspace", workspaceId, "stats"],
     queryFn: async () => fetchData(`/workspaces/${workspaceId}/stats`),
+    enabled: options?.enabled !== false && !!workspaceId, // Default enabled unless explicitly disabled
   });
 };
 
 export const useGetWorkspaceDetailsQuery = (workspaceId: string) => {
-  return useQuery({
+  return useQuery<Workspace>({
     queryKey: ["workspace", workspaceId, "details"],
-    queryFn: async () => fetchData(`/workspaces/${workspaceId}`),
+    queryFn: async () => fetchData<Workspace>(`/workspaces/${workspaceId}`),
+    enabled: !!workspaceId,
   });
 };
 
@@ -56,5 +59,38 @@ export const useAcceptGenerateInviteMutation = () => {
   return useMutation({
     mutationFn: (workspaceId: string) =>
       postData(`/workspaces/${workspaceId}/accept-generate-invite`, {}),
+  });
+};
+
+export interface UpdateWorkspaceData {
+  name?: string;
+  description?: string;
+  color?: string;
+}
+
+export const useUpdateWorkspaceMutation = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: ({ workspaceId, data }: { workspaceId: string; data: UpdateWorkspaceData }) =>
+      updateData(`/workspaces/${workspaceId}`, data),
+    onSuccess: (_, { workspaceId }) => {
+      // Invalidate related queries
+      queryClient.invalidateQueries({ queryKey: ["workspace", workspaceId] });
+      queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+    },
+  });
+};
+
+export const useDeleteWorkspaceMutation = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: (workspaceId: string) => deleteData(`/workspaces/${workspaceId}`),
+    onSuccess: (_, workspaceId) => {
+      // Remove the workspace from cache and invalidate workspaces list
+      queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+      queryClient.removeQueries({ queryKey: ["workspace", workspaceId] });
+    },
   });
 };

@@ -13,6 +13,9 @@ export const useCreateTaskMutation = () => {
       queryClient.invalidateQueries({
         queryKey: ["project", data.project],
       });
+      queryClient.invalidateQueries({
+        queryKey: ["project", data.project, "with-archived"],
+      });
     },
   });
 };
@@ -53,6 +56,12 @@ export const useUpdateTaskStatusMutation = () => {
       });
       queryClient.invalidateQueries({
         queryKey: ["task-activity", data._id],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["project", data.project],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["project", data.project, "with-archived"],
       });
     },
   });
@@ -206,6 +215,12 @@ export const useAchievedTaskMutation = () => {
       });
       queryClient.invalidateQueries({
         queryKey: ["task-activity", data._id],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["project", data.project],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["project", data.project, "with-archived"],
       });
     },
   });

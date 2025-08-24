@@ -4,6 +4,7 @@ import Comment from "../models/comment.js";
 import Project from "../models/project.js";
 import Task from "../models/task.js";
 import Workspace from "../models/workspace.js";
+import { createNotification } from "./notification.js";
 
 const createTask = async (req, res) => {
   try {
@@ -227,6 +228,38 @@ const updateTaskStatus = async (req, res) => {
     task.status = status;
     await task.save();
 
+    // Create notifications for task watchers and assignees
+    const notificationRecipients = [...task.assignees];
+    if (task.watchers && task.watchers.length > 0) {
+      notificationRecipients.push(...task.watchers);
+    }
+
+    // Remove duplicates
+    const uniqueRecipients = [...new Set(notificationRecipients.map(id => id.toString()))];
+
+    if (uniqueRecipients.length > 0) {
+      const statusMessage = status === "Done" 
+        ? `Task "${task.title}" has been completed`
+        : `Task "${task.title}" status changed from ${oldStatus} to ${status}`;
+
+      await createNotification({
+        users: uniqueRecipients,
+        type: status === "Done" ? "task_completed" : "task_status_changed",
+        title: "Task Status Updated",
+        message: statusMessage,
+        resourceType: "Task",
+        resourceId: taskId,
+        actionBy: req.user._id,
+        workspace: project.workspace,
+        metadata: {
+          taskTitle: task.title,
+          projectTitle: project.title,
+          oldStatus,
+          newStatus: status
+        }
+      });
+    }
+
     // record activity
     await recordActivity(req.user._id, "updated_task", "Task", taskId, {
       description: `updated task status from ${oldStatus} to ${status}`,
@@ -275,6 +308,30 @@ const updateTaskAssignees = async (req, res) => {
 
     task.assignees = assignees;
     await task.save();
+
+    // Find newly assigned users
+    const newAssignees = assignees.filter(assigneeId => 
+      !oldAssignees.some(oldAssignee => oldAssignee.toString() === assigneeId.toString())
+    );
+
+    // Create notifications for newly assigned users
+    if (newAssignees.length > 0) {
+      await createNotification({
+        users: newAssignees,
+        type: "task_assigned",
+        title: "New Task Assignment",
+        message: `You have been assigned to task "${task.title}"`,
+        resourceType: "Task",
+        resourceId: taskId,
+        actionBy: req.user._id,
+        workspace: project.workspace,
+        metadata: {
+          taskTitle: task.title,
+          projectTitle: project.title,
+          priority: task.priority
+        }
+      });
+    }
 
     // record activity
     await recordActivity(req.user._id, "updated_task", "Task", taskId, {
@@ -506,6 +563,33 @@ const addComment = async (req, res) => {
 
     task.comments.push(newComment._id);
     await task.save();
+
+    // Create notifications for task assignees and watchers
+    const notificationRecipients = [...task.assignees];
+    if (task.watchers && task.watchers.length > 0) {
+      notificationRecipients.push(...task.watchers);
+    }
+
+    // Remove duplicates
+    const uniqueRecipients = [...new Set(notificationRecipients.map(id => id.toString()))];
+
+    if (uniqueRecipients.length > 0) {
+      await createNotification({
+        users: uniqueRecipients,
+        type: "task_commented",
+        title: "New Comment on Task",
+        message: `New comment added to task "${task.title}"`,
+        resourceType: "Task",
+        resourceId: taskId,
+        actionBy: req.user._id,
+        workspace: project.workspace,
+        metadata: {
+          taskTitle: task.title,
+          projectTitle: project.title,
+          commentPreview: text.substring(0, 100)
+        }
+      });
+    }
 
     // record activity
     await recordActivity(req.user._id, "added_comment", "Task", taskId, {

@@ -25,7 +25,9 @@ mongoose
   .then(() => console.log("BD Connected successfully."))
   .catch((err) => console.log("Failed to connect to DB:", err));
 
-app.use(express.json());
+// Increase payload limit for base64 image uploads
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 const PORT = process.env.PORT || 5000;
 
