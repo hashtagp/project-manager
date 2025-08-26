@@ -85,8 +85,13 @@ export const ProjectStatusManager = ({
       if (data.title !== project.title) changedData.title = data.title;
       if (data.description !== (project.description || "")) changedData.description = data.description;
       if (data.status !== project.status) changedData.status = data.status;
-      if (data.startDate?.toISOString() !== project.startDate) changedData.startDate = data.startDate;
-      if (data.dueDate?.toISOString() !== project.dueDate) changedData.dueDate = data.dueDate;
+      
+      // Compare dates properly by converting both to ISO strings
+      const projectStartDate = project.startDate ? new Date(project.startDate).toISOString() : undefined;
+      const projectDueDate = project.dueDate ? new Date(project.dueDate).toISOString() : undefined;
+      
+      if (data.startDate?.toISOString() !== projectStartDate) changedData.startDate = data.startDate;
+      if (data.dueDate?.toISOString() !== projectDueDate) changedData.dueDate = data.dueDate;
 
       if (Object.keys(changedData).length === 0) {
         toast.info("No changes detected");
