@@ -94,3 +94,29 @@ export const useDeleteWorkspaceMutation = () => {
     },
   });
 };
+
+export const useUpdateMemberRoleMutation = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: ({ workspaceId, memberId, role }: { workspaceId: string; memberId: string; role: string }) =>
+      updateData(`/workspaces/${workspaceId}/members/${memberId}/role`, { role }),
+    onSuccess: (_, { workspaceId }) => {
+      // Invalidate workspace details to refresh member list
+      queryClient.invalidateQueries({ queryKey: ["workspace", workspaceId, "details"] });
+    },
+  });
+};
+
+export const useRemoveMemberMutation = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: ({ workspaceId, memberId }: { workspaceId: string; memberId: string }) =>
+      deleteData(`/workspaces/${workspaceId}/members/${memberId}`),
+    onSuccess: (_, { workspaceId }) => {
+      // Invalidate workspace details to refresh member list
+      queryClient.invalidateQueries({ queryKey: ["workspace", workspaceId, "details"] });
+    },
+  });
+};

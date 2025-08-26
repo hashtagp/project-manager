@@ -1,13 +1,16 @@
 import { BackButton } from "@/components/back-button";
 import { Loader } from "@/components/loader";
 import { CreateTaskDialog } from "@/components/task/create-task-dialog";
+import { ProjectMemberManagement } from "@/components/project/project-member-management";
+import { ProjectStatusManager } from "@/components/project/project-status-manager";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { UseProjectQuery } from "@/hooks/use-project";
+import { UseProjectQuery, useUpdateProjectMutation } from "@/hooks/use-project";
+import { useGetWorkspaceDetailsQuery } from "@/hooks/use-workspace";
 import { useUpdateTaskStatusMutation } from "@/hooks/use-task";
 import { getProjectProgress } from "@/lib";
 import { cn } from "@/lib/utils";
@@ -28,6 +31,7 @@ import { AlertCircle, Calendar, CheckCircle, Clock } from "lucide-react";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { toast } from "sonner";
+import { useAuth } from "@/provider/auth-context";
 
 const ProjectDetails = () => {
   const { projectId, workspaceId } = useParams<{
@@ -35,12 +39,14 @@ const ProjectDetails = () => {
     workspaceId: string;
   }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const [isCreateTask, setIsCreateTask] = useState(false);
   const [taskFilter, setTaskFilter] = useState<TaskStatus | "All" | "Archived">("All");
   const [activeTask, setActiveTask] = useState<Task | null>(null);
 
   const { mutate: updateTaskStatus } = useUpdateTaskStatusMutation();
+  const { mutate: updateProject } = useUpdateProjectMutation();
   
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -57,8 +63,10 @@ const ProjectDetails = () => {
     };
     isLoading: boolean;
   };
+  
+  const { data: workspaceData } = useGetWorkspaceDetailsQuery(workspaceId!);
 
-  if (isLoading)
+  if (isLoading || !workspaceData || !user)
     return (
       <div>
         <Loader />
@@ -67,6 +75,26 @@ const ProjectDetails = () => {
 
   const { project, tasks } = data;
   const projectProgress = getProjectProgress(tasks);
+
+  // Check if user can edit project (admin or owner)
+  const currentUserRole = workspaceData.members.find(m => m.user._id === user._id)?.role;
+  const canEditProject = currentUserRole === 'admin' || currentUserRole === 'owner';
+
+  const handleProjectUpdate = async (updateData: any) => {
+    return new Promise<void>((resolve, reject) => {
+      updateProject(
+        { projectId: projectId!, data: updateData },
+        {
+          onSuccess: () => {
+            resolve();
+          },
+          onError: (error) => {
+            reject(error);
+          }
+        }
+      );
+    });
+  };
 
   const handleTaskClick = (taskId: string) => {
     navigate(
@@ -131,6 +159,12 @@ const ProjectDetails = () => {
             </span>
           </div>
 
+          <ProjectStatusManager
+            project={project}
+            onUpdate={handleProjectUpdate}
+            canEdit={canEditProject}
+          />
+
           <Button onClick={() => setIsCreateTask(true)}>Add Task</Button>
         </div>
       </div>
@@ -156,6 +190,9 @@ const ProjectDetails = () => {
               </TabsTrigger>
               <TabsTrigger value="archived" onClick={() => setTaskFilter("Archived")}>
                 Archived
+              </TabsTrigger>
+              <TabsTrigger value="members">
+                Members
               </TabsTrigger>
             </TabsList>
 
@@ -261,6 +298,19 @@ const ProjectDetails = () => {
                 tasks={tasks.filter((task) => task.isArchived === true)}
                 onTaskClick={handleTaskClick}
                 isFullWidth
+              />
+            </div>
+          </TabsContent>
+
+          <TabsContent value="members" className="m-0">
+            <div className="max-w-4xl">
+              <ProjectMemberManagement
+                project={project}
+                workspaceMembers={workspaceData.members}
+                currentUserRole={
+                  workspaceData.members.find(m => m.user._id === user._id)?.role || "viewer"
+                }
+                currentUserId={user._id}
               />
             </div>
           </TabsContent>

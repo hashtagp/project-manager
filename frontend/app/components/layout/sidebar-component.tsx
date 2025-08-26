@@ -2,6 +2,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/provider/auth-context";
 import type { Workspace } from "@/types";
 import {
+  Bell,
   CheckCircle2,
   ChevronsLeft,
   ChevronsRight,
@@ -46,6 +47,11 @@ export const SidebarComponent = ({
       title: "Members",
       href: `/members`,
       icon: Users,
+    },
+    {
+      title: "Notifications",
+      href: "/notifications",
+      icon: Bell,
     },
     {
       title: "Achieved",

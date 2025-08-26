@@ -72,6 +72,42 @@ const taskSchema = z.object({
   assignees: z.array(z.string()).min(1, "At least one assignee is required"),
 });
 
+const updateMemberRoleSchema = z.object({
+  role: z.enum(["owner", "admin", "member", "viewer"]),
+});
+
+const projectMemberSchema = z.object({
+  user: z.string().regex(/^[0-9a-fA-F]{24}$/, "Invalid user ID"),
+  role: z.enum(["manager", "contributor", "viewer"]),
+});
+
+const updateProjectMembersSchema = z.object({
+  members: z.array(projectMemberSchema),
+});
+
+const addProjectMemberSchema = z.object({
+  userId: z.string().regex(/^[0-9a-fA-F]{24}$/, "Invalid user ID"),
+  role: z.enum(["manager", "contributor", "viewer"]).default("contributor"),
+});
+
+const updateProjectMemberRoleSchema = z.object({
+  role: z.enum(["manager", "contributor", "viewer"]),
+});
+
+const updateProjectSchema = z.object({
+  title: z.string().min(3, "Title is required").optional(),
+  description: z.string().optional(),
+  status: z.enum([
+    "Planning",
+    "In Progress", 
+    "On Hold",
+    "Completed",
+    "Cancelled",
+  ]).optional(),
+  startDate: z.string().optional(),
+  dueDate: z.string().optional(),
+});
+
 export {
   registerSchema,
   loginSchema,
@@ -83,4 +119,10 @@ export {
   taskSchema,
   inviteMemberSchema,
   tokenSchema,
+  updateMemberRoleSchema,
+  projectMemberSchema,
+  updateProjectMembersSchema,
+  addProjectMemberSchema,
+  updateProjectMemberRoleSchema,
+  updateProjectSchema,
 };

@@ -21,14 +21,17 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useGetMyTasksQuery } from "@/hooks/use-task";
 import { useGetWorkspaceDetailsQuery } from "@/hooks/use-workspace";
+import { MemberActionsMenu } from "@/components/workspace/member-actions-menu";
 import type { Task, Workspace } from "@/types";
 import { format } from "date-fns";
 import { ArrowUpRight, CheckCircle, Clock, FilterIcon } from "lucide-react";
 import React, { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router";
+import { useAuth } from "@/provider/auth-context";
 
 const Members = () => {
   const [searchParams, setSearchParams] = useSearchParams();
+  const { user } = useAuth();
 
   const workspaceId = searchParams.get("workspaceId");
   const initialSearch = searchParams.get("search") || "";
@@ -63,7 +66,11 @@ const Members = () => {
       </div>
     );
 
-  if (!data || !workspaceId) return <div>No workspace found</div>;
+  if (!data || !workspaceId || !user) return <div>No workspace found</div>;
+
+  // Find current user's role in workspace
+  const currentUserMember = data.members.find(m => m.user._id === user._id);
+  const currentUserRole = currentUserMember?.role || "viewer";
 
   const filteredMembers = data?.members?.filter(
     (member) =>
@@ -136,6 +143,13 @@ const Members = () => {
                       </Badge>
 
                       <Badge variant={"outline"}>{data.name}</Badge>
+                      
+                      <MemberActionsMenu
+                        member={member}
+                        workspaceId={workspaceId}
+                        currentUserRole={currentUserRole}
+                        currentUserId={user._id}
+                      />
                     </div>
                   </div>
                 ))}
@@ -174,6 +188,13 @@ const Members = () => {
                   >
                     {member.role}
                   </Badge>
+                  
+                  <MemberActionsMenu
+                    member={member}
+                    workspaceId={workspaceId}
+                    currentUserRole={currentUserRole}
+                    currentUserId={user._id}
+                  />
                 </CardContent>
               </Card>
             ))}

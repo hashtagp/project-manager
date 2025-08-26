@@ -223,6 +223,7 @@ export const CreateProjectDialog = ({
                       <Popover>
                         <PopoverTrigger asChild>
                           <Button
+                            type="button"
                             variant={"outline"}
                             className="w-full justify-start text-left font-normal min-h-11"
                           >
@@ -236,18 +237,24 @@ export const CreateProjectDialog = ({
                                   (wm) => wm.user._id === m.user
                                 );
 
-                                return `${member?.user.name} (${member?.role})`;
-                              })
+                                return `${member?.user.name} (${m.role})`;
+                              }).join(", ")
                             ) : (
                               `${selectedMembers.length} members selected`
                             )}
                           </Button>
                         </PopoverTrigger>
                         <PopoverContent
-                          className="w-full max-w-60 overflow-y-auto"
+                          className="w-full max-w-80 max-h-60 overflow-y-auto p-2"
                           align="start"
+                          onOpenAutoFocus={(e) => {
+                            e.preventDefault()
+                          }}
                         >
-                          <div className="flex flex-col gap-2">
+                          <div 
+                            className="flex flex-col gap-2"
+                            onClick={(e) => e.stopPropagation()}
+                          >
                             {workspaceMembers.map((member) => {
                               const selectedMember = selectedMembers.find(
                                 (m) => m.user === member.user._id
@@ -256,7 +263,16 @@ export const CreateProjectDialog = ({
                               return (
                                 <div
                                   key={member._id}
-                                  className="flex items-center gap-2 p-2 border rounded"
+                                  className="flex items-center gap-2 p-2 border rounded hover:bg-gray-50"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    // Toggle checkbox when clicking anywhere on the row (except select)
+                                    const checkbox = e.currentTarget.querySelector('input[type="checkbox"]') as HTMLInputElement
+                                    const target = e.target as Element
+                                    if (target !== checkbox && !target.closest('[role="combobox"]')) {
+                                      checkbox?.click()
+                                    }
+                                  }}
                                 >
                                   <Checkbox
                                     checked={!!selectedMember}
@@ -279,9 +295,12 @@ export const CreateProjectDialog = ({
                                     }}
                                     id={`member-${member.user._id}`}
                                   />
-                                  <span className="truncate flex-1">
+                                  <label 
+                                    htmlFor={`member-${member.user._id}`}
+                                    className="truncate flex-1 cursor-pointer"
+                                  >
                                     {member.user.name}
-                                  </span>
+                                  </label>
 
                                   {selectedMember && (
                                     <Select
@@ -302,7 +321,9 @@ export const CreateProjectDialog = ({
                                         );
                                       }}
                                     >
-                                      <SelectTrigger>
+                                      <SelectTrigger
+                                        className="h-6 text-xs"
+                                      >
                                         <SelectValue placeholder="Select Role" />
                                       </SelectTrigger>
                                       <SelectContent>

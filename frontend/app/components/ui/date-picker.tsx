@@ -33,8 +33,15 @@ export function DatePicker({
   }
 
   const handleClear = (e: React.MouseEvent) => {
+    e.preventDefault()
     e.stopPropagation()
     onSelect?.(undefined)
+  }
+
+  const handleQuickSelect = (selectedDate: Date) => {
+    // Create a new Date object to avoid reference issues
+    const newDate = new Date(selectedDate.getTime())
+    handleSelect(newDate)
   }
 
   const getQuickDateOptions = () => {
@@ -56,6 +63,7 @@ export function DatePicker({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
+          type="button"
           variant="outline"
           className={cn(
             "w-full justify-start text-left font-normal relative",
@@ -68,6 +76,7 @@ export function DatePicker({
           {date ? format(date, "PPP") : <span>{placeholder}</span>}
           {date && !disabled && (
             <Button
+              type="button"
               variant="ghost"
               size="sm"
               className="absolute right-1 h-6 w-6 p-0 hover:bg-destructive hover:text-destructive-foreground"
@@ -78,29 +87,41 @@ export function DatePicker({
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-0" align="start">
-        <div className="border-b p-3">
+      <PopoverContent 
+        className="w-auto p-0" 
+        align="start"
+        onOpenAutoFocus={(e) => {
+          e.preventDefault()
+        }}
+      >
+        <div className="border-b p-3" onClick={(e) => e.stopPropagation()}>
           <div className="flex gap-1">
             {getQuickDateOptions().map((option) => (
               <Button
                 key={option.label}
+                type="button"
                 variant="ghost"
                 size="sm"
                 className="text-xs"
-                onClick={() => handleSelect(option.date)}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleQuickSelect(option.date)
+                }}
               >
                 {option.label}
               </Button>
             ))}
           </div>
         </div>
-        <Calendar
-          mode="single"
-          selected={date}
-          onSelect={handleSelect}
-          initialFocus
-          className="rounded-md"
-        />
+        <div onClick={(e) => e.stopPropagation()}>
+          <Calendar
+            mode="single"
+            selected={date}
+            onSelect={handleSelect}
+            initialFocus
+            className="rounded-md"
+          />
+        </div>
       </PopoverContent>
     </Popover>
   )

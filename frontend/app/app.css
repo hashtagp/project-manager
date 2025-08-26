@@ -132,3 +132,50 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+/* Fix for nested popovers and z-index issues */
+@layer components {
+  [data-radix-popper-content-wrapper] {
+    z-index: 60 !important;
+  }
+  
+  [data-slot="popover-content"] {
+    z-index: 60 !important;
+    pointer-events: auto !important;
+  }
+  
+  [data-radix-select-content] {
+    z-index: 70 !important;
+  }
+  
+  .rdp-button_reset {
+    background: transparent !important;
+    border: none !important;
+  }
+  
+  .rdp-day_button:focus {
+    outline: 2px solid rgb(var(--ring)) !important;
+    outline-offset: 2px !important;
+  }
+  
+  /* Ensure calendar buttons are clickable */
+  .rdp-day_button {
+    pointer-events: auto !important;
+    position: relative !important;
+    z-index: 1 !important;
+  }
+  
+  /* Ensure popover content doesn't block interactions */
+  [data-radix-popover-content] {
+    pointer-events: auto !important;
+  }
+  
+  /* Fix for dialog overlay conflicts */
+  [data-radix-dialog-overlay] {
+    z-index: 50 !important;
+  }
+  
+  [data-radix-dialog-content] {
+    z-index: 51 !important;
+  }
+}

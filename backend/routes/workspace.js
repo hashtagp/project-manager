@@ -11,11 +11,14 @@ import {
   getWorkspaceStats,
   inviteUserToWorkspace,
   updateWorkspace,
+  updateMemberRole,
+  removeMemberFromWorkspace,
 } from "../controllers/workspace.js";
 import {
   inviteMemberSchema,
   tokenSchema,
   workspaceSchema,
+  updateMemberRoleSchema,
 } from "../libs/validate-schema.js";
 import authMiddleware from "../middleware/auth-middleware.js";
 import { z } from "zod";
@@ -107,6 +110,28 @@ router.delete("/:workspaceId", authMiddleware,
     })
   }),
   deleteWorkspace
+);
+
+// Member management routes
+router.put("/:workspaceId/members/:memberId/role", authMiddleware,
+  validateRequest({
+    params: z.object({
+      workspaceId: z.string().regex(/^[0-9a-fA-F]{24}$/, "Invalid workspace ID format"),
+      memberId: z.string().regex(/^[0-9a-fA-F]{24}$/, "Invalid member ID format")
+    }),
+    body: updateMemberRoleSchema
+  }),
+  updateMemberRole
+);
+
+router.delete("/:workspaceId/members/:memberId", authMiddleware,
+  validateRequest({
+    params: z.object({
+      workspaceId: z.string().regex(/^[0-9a-fA-F]{24}$/, "Invalid workspace ID format"),
+      memberId: z.string().regex(/^[0-9a-fA-F]{24}$/, "Invalid member ID format")
+    })
+  }),
+  removeMemberFromWorkspace
 );
 
 export default router;

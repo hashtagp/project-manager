@@ -1,4 +1,5 @@
 import type { Project } from "@/types";
+import { getProjectProgress } from "@/lib";
 import { NoDataFound } from "../no-data-found";
 import { ProjectCard } from "../project/projetc-card";
 
@@ -27,7 +28,8 @@ export const ProjectList = ({
           />
         ) : (
           projects.map((project) => {
-            const projectProgress = 0;
+            // Calculate actual progress based on completed tasks
+            const projectProgress = getProjectProgress(project.tasks || []);
 
             return (
               <ProjectCard

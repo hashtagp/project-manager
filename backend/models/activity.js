@@ -27,6 +27,10 @@ const activityLogSchema = new Schema(
         "joined_workspace",
         "transferred_workspace_ownership",
         "added_attachment",
+        "updated_member_role",
+        "added_member_to_project",
+        "removed_member_from_project",
+        "updated_project_member_role",
       ],
     },
     resourceType: {

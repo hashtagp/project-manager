@@ -5,6 +5,7 @@ import WorkspaceInvite from "../models/workspace-invite.js";
 import jwt from "jsonwebtoken";
 import { sendEmail } from "../libs/send-email.js";
 import { recordActivity } from "../libs/index.js";
+import { createNotification } from "./notification.js";
 
 const createWorkspace = async (req, res) => {
   try {
@@ -477,15 +478,37 @@ const acceptGenerateInvite = async (req, res) => {
 
     await workspace.save();
 
-    await recordActivity(
-      req.user._id,
-      "joined_workspace",
-      "Workspace",
-      workspaceId,
-      {
-        description: `Joined ${workspace.name} workspace`,
+    // Add the new member to all projects in the workspace
+    const projects = await Project.find({ workspace: workspaceId });
+    
+    const projectUpdates = projects.map(project => {
+      // Check if user is not already a member of this project
+      const isProjectMember = project.members.some(
+        member => member.user.toString() === req.user._id.toString()
+      );
+      
+      if (!isProjectMember) {
+        project.members.push({
+          user: req.user._id,
+          role: "contributor" // Default role for project membership
+        });
+        return project.save();
       }
-    );
+      return Promise.resolve();
+    });
+
+    await Promise.all([
+      recordActivity(
+        req.user._id,
+        "joined_workspace",
+        "Workspace",
+        workspaceId,
+        {
+          description: `Joined ${workspace.name} workspace`,
+        }
+      ),
+      ...projectUpdates
+    ]);
 
     res.status(200).json({
       message: "Invitation accepted successfully",
@@ -549,12 +572,72 @@ const acceptInviteByToken = async (req, res) => {
 
     await workspace.save();
 
+    // Add the new member to all projects in the workspace
+    const projects = await Project.find({ workspace: workspaceId });
+    
+    const projectUpdates = projects.map(project => {
+      // Check if user is not already a member of this project
+      const isProjectMember = project.members.some(
+        member => member.user.toString() === user.toString()
+      );
+      
+      if (!isProjectMember) {
+        project.members.push({
+          user: user,
+          role: "contributor" // Default role for project membership
+        });
+        return project.save();
+      }
+      return Promise.resolve();
+    });
+
     await Promise.all([
       WorkspaceInvite.deleteOne({ _id: inviteInfo._id }),
       recordActivity(user, "joined_workspace", "Workspace", workspaceId, {
         description: `Joined ${workspace.name} workspace`,
       }),
+      ...projectUpdates
     ]);
+
+    // Notify workspace admins and owner about new member
+    const workspaceAdmins = workspace.members
+      .filter(member => ["owner", "admin"].includes(member.role))
+      .map(member => member.user);
+
+    if (workspaceAdmins.length > 0) {
+      const newUser = await User.findById(user);
+      await createNotification({
+        users: workspaceAdmins,
+        type: "workspace_member_joined",
+        title: "New Member Joined",
+        message: `${newUser.name} has joined the ${workspace.name} workspace`,
+        resourceType: "Workspace",
+        resourceId: workspaceId,
+        actionBy: user,
+        workspace: workspaceId,
+        metadata: {
+          memberName: newUser.name,
+          memberRole: role || "member",
+          workspaceName: workspace.name
+        }
+      });
+    }
+
+    // Notify the new member about successful joining
+    await createNotification({
+      users: [user],
+      type: "workspace_invited", 
+      title: "Welcome to Workspace",
+      message: `You have successfully joined the ${workspace.name} workspace`,
+      resourceType: "Workspace",
+      resourceId: workspaceId,
+      actionBy: workspace.owner,
+      workspace: workspaceId,
+      metadata: {
+        workspaceName: workspace.name,
+        role: role || "member"
+      }
+    });
 
     res.status(200).json({
       message: "Invitation accepted successfully",
@@ -661,6 +744,204 @@ const deleteWorkspace = async (req, res) => {
     });
   }
 };
+
+const updateMemberRole = async (req, res) => {
+  try {
+    const { workspaceId, memberId } = req.params;
+    const { role } = req.body;
+
+    const workspace = await Workspace.findById(workspaceId);
+
+    if (!workspace) {
+      return res.status(404).json({
+        message: "Workspace not found",
+      });
+    }
+
+    // Check if the current user is owner or admin
+    const currentUserMember = workspace.members.find(
+      member => member.user.toString() === req.user._id.toString()
+    );
+
+    if (!currentUserMember || !["owner", "admin"].includes(currentUserMember.role)) {
+      return res.status(403).json({
+        message: "You don't have permission to modify member roles",
+      });
+    }
+
+    // Find the member to update
+    const memberToUpdate = workspace.members.find(
+      member => member.user.toString() === memberId
+    );
+
+    if (!memberToUpdate) {
+      return res.status(404).json({
+        message: "Member not found in this workspace",
+      });
+    }
+
+    // Don't allow changing the owner role
+    if (memberToUpdate.role === "owner") {
+      return res.status(400).json({
+        message: "Cannot change the role of the workspace owner",
+      });
+    }
+
+    // Only owner can assign admin role
+    if (role === "admin" && currentUserMember.role !== "owner") {
+      return res.status(403).json({
+        message: "Only the workspace owner can assign admin roles",
+      });
+    }
+
+    // Update the member's role
+    const oldRole = memberToUpdate.role;
+    memberToUpdate.role = role;
+    await workspace.save();
+
+    await recordActivity(
+      req.user._id,
+      "updated_member_role",
+      "Workspace",
+      workspaceId,
+      {
+        description: `Updated member role to ${role} in ${workspace.name} workspace`,
+      }
+    );
+
+    // Notify the member about role change
+    const targetUser = await User.findById(memberId);
+    const actionUser = await User.findById(req.user._id);
+    
+    await createNotification({
+      users: [memberId],
+      type: "workspace_updated",
+      title: "Your Role Updated",
+      message: `Your role in ${workspace.name} workspace has been updated from ${oldRole} to ${role} by ${actionUser.name}`,
+      resourceType: "Workspace",
+      resourceId: workspaceId,
+      actionBy: req.user._id,
+      workspace: workspaceId,
+      metadata: {
+        oldRole,
+        newRole: role,
+        workspaceName: workspace.name,
+        actionByName: actionUser.name
+      }
+    });
+
+    res.status(200).json({
+      message: "Member role updated successfully",
+      member: memberToUpdate,
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({
+      message: "Internal server error",
+    });
+  }
+};
+
+const removeMemberFromWorkspace = async (req, res) => {
+  try {
+    const { workspaceId, memberId } = req.params;
+
+    const workspace = await Workspace.findById(workspaceId);
+
+    if (!workspace) {
+      return res.status(404).json({
+        message: "Workspace not found",
+      });
+    }
+
+    // Check if the current user is owner or admin
+    const currentUserMember = workspace.members.find(
+      member => member.user.toString() === req.user._id.toString()
+    );
+
+    if (!currentUserMember || !["owner", "admin"].includes(currentUserMember.role)) {
+      return res.status(403).json({
+        message: "You don't have permission to remove members",
+      });
+    }
+
+    // Find the member to remove
+    const memberToRemove = workspace.members.find(
+      member => member.user.toString() === memberId
+    );
+
+    if (!memberToRemove) {
+      return res.status(404).json({
+        message: "Member not found in this workspace",
+      });
+    }
+
+    // Don't allow removing the owner
+    if (memberToRemove.role === "owner") {
+      return res.status(400).json({
+        message: "Cannot remove the workspace owner",
+      });
+    }
+
+    // Remove member from workspace
+    workspace.members = workspace.members.filter(
+      member => member.user.toString() !== memberId
+    );
+
+    // Remove member from all projects in the workspace
+    const projects = await Project.find({ workspace: workspaceId });
+    const projectUpdates = projects.map(project => {
+      project.members = project.members.filter(
+        member => member.user.toString() !== memberId
+      );
+      return project.save();
+    });
+
+    await Promise.all([
+      workspace.save(),
+      ...projectUpdates,
+      recordActivity(
+        req.user._id,
+        "removed_member",
+        "Workspace",
+        workspaceId,
+        {
+          description: `Removed member from ${workspace.name} workspace`,
+        }
+      )
+    ]);
+
+    // Notify the removed member
+    const removedUser = await User.findById(memberId);
+    const actionUser = await User.findById(req.user._id);
+    
+    await createNotification({
+      users: [memberId],
+      type: "workspace_updated",
+      title: "Removed from Workspace",
+      message: `You have been removed from the ${workspace.name} workspace by ${actionUser.name}`,
+      resourceType: "Workspace", 
+      resourceId: workspaceId,
+      actionBy: req.user._id,
+      workspace: workspaceId,
+      metadata: {
+        workspaceName: workspace.name,
+        actionByName: actionUser.name,
+        removedUserName: removedUser.name
+      }
+    });
+
+    res.status(200).json({
+      message: "Member removed successfully",
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({
+      message: "Internal server error",
+    });
+  }
+};
+
 export {
   createWorkspace,
   getWorkspaces,
@@ -672,4 +953,6 @@ export {
   acceptInviteByToken,
   updateWorkspace,
   deleteWorkspace,
+  updateMemberRole,
+  removeMemberFromWorkspace,
 };
